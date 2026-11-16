@@ -1,10 +1,20 @@
 // app.js — Punto de entrada de la aplicación (módulo ES).
-// Conecta DOM, personalidades, chat y la API de Gemini.
+// Conecta DOM, personalidades, chat, API de Gemini y gestión de agentes.
 
 import { API_KEY, DEFAULT_MODEL } from './config.js';
 import { loadPersonality } from './personality.js';
 import { ChatManager } from './chat.js';
 import { generateContent } from './api.js';
+import {
+  AGENTES_DIR,
+  loadAgentesFromDisk,
+  renderAgentes,
+  getAgente,
+  saveAgente,
+  downloadAgente,
+  slugify
+} from './agentes.js';
+import { showAgenteForm } from './agente-form.js';
 
 // Referencias al DOM
 const elements = {
@@ -14,15 +24,22 @@ const elements = {
   composer: document.getElementById('composer'),
   prompt: document.getElementById('prompt'),
   sendBtn: document.getElementById('sendBtn'),
-  personalitySelect: document.getElementById('personalitySelect')
+  personalitySelect: document.getElementById('personalitySelect'),
+  nuevoAgenteBtn: document.getElementById('nuevoAgenteBtn'),
+  agenteForm: document.getElementById('agenteForm')
 };
 
 // Estado de la aplicación
 const chat = new ChatManager(elements);
 let systemInstruction = '';
 
+// ========== Inicialización de agentes ==========
+await loadAgentesFromDisk();
+renderAgentes(elements.personalitySelect);
+
 // ========== Cargar personalidad por defecto (Jarvis) ==========
-systemInstruction = await loadPersonality('./agentes_de_personalidad/jarvis.json');
+const jarvis = getAgente('./agentes_de_personalidad/jarvis.json');
+systemInstruction = jarvis ? jarvis.systemInstruction : await loadPersonality('./agentes_de_personalidad/jarvis.json');
 
 // ========== Borrar conversación ==========
 elements.clearChatBtn.addEventListener('click', () => {
@@ -32,8 +49,12 @@ elements.clearChatBtn.addEventListener('click', () => {
 
 // ========== Cambiar personalidad ==========
 elements.personalitySelect.addEventListener('change', async () => {
-  systemInstruction = await loadPersonality(elements.personalitySelect.value);
-  // Limpiar conversación al cambiar personalidad para evitar confusión
+  const agente = getAgente(elements.personalitySelect.value);
+  if (agente) {
+    systemInstruction = agente.systemInstruction;
+  } else {
+    systemInstruction = await loadPersonality(elements.personalitySelect.value);
+  }
   chat.clear();
 });
 
@@ -57,16 +78,12 @@ elements.composer.addEventListener('submit', (e) => {
     return;
   }
 
-  // Validar modelo
   let model = elements.modelSelect.value;
   if (!model) model = DEFAULT_MODEL;
 
-  // Mostrar mensaje del usuario
   chat.appendMessage('user', text, false);
   elements.prompt.value = '';
   elements.prompt.style.height = 'auto';
-
-  // Bloquear envío mientras la API responde
   chat.setSendingState(true);
 
   generateContent(API_KEY, model, chat.conversation, (error, replyText) => {
@@ -77,4 +94,24 @@ elements.composer.addEventListener('submit', (e) => {
     }
     chat.setSendingState(false);
   }, systemInstruction);
+});
+
+// ========== Crear/editar agente ==========
+elements.nuevoAgenteBtn.addEventListener('click', async () => {
+  const datos = await showAgenteForm(elements.agenteForm);
+  if (!datos) {
+    elements.agenteForm.innerHTML = '';
+    return;
+  }
+
+  const file = AGENTES_DIR + slugify(datos.nombre) + '.json';
+  saveAgente(file, datos);
+
+  // Opcional: descargar el archivo para que el usuario lo guarde en la carpeta.
+  downloadAgente(file, datos);
+
+  // Refrescar selector y seleccionar el nuevo agente.
+  renderAgentes(elements.personalitySelect, file);
+  elements.agenteForm.innerHTML = '';
+  alert('Agente "' + datos.nombre + '" creado. Seleccionado en la lista.');
 });

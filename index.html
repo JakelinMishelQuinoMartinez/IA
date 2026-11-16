@@ -24,9 +24,13 @@
             <select name="personalitySelect" id="personalitySelect" title="Personalidad">
                 <option value="./agentes_de_personalidad/jarvis.json" selected>Jarvis (Mentor)</option>
             </select>
+            <button id="nuevoAgenteBtn" class="ghost" title="Nuevo agente">+ Agente</button>
             <button id="clearChatBtn" class="ghost" title="Borrar Converesasión">Borrar</button>
         </div>
     </header>
+
+    <!-- Contenedor del formulario de creación de agentes -->
+    <div id="agenteForm" class="agente-form-container"></div>
 
     <main class="chat">
         <div id="messages" class="messages" aria-live="polite"></div>
